@@ -26,13 +26,16 @@
   const platformWidth = 126;
   const objectiveLeadTime = 1.8;
   const alternateSideScore = 20;
-  const appleScore = 30;
+  const appleScore = 25;
   const appleRadius = 20;
   const knockDuration = 1;
-  const awardScore = 50;
+  const awardScores = [50, 100];
+  const fruitScore = 40;
+  const fruitBounceSpeed = 520;
   const badgeDuration = 4;
   const maxSpeedScore = 15;
   const squishDuration = .4;
+  const peelOutDuration = .35;
   const squishAmount = .2;
   const giftRibbonDuration = 1.8;
   const initialGiftInterval = 5;
@@ -65,6 +68,7 @@
   let appleTimer = 0;
   let appleTurn = false;
   let pendingApple = null;
+  let fruitTurnNext = true;
   let knock = null;
   let award = null;
   let badge = null;
@@ -112,6 +116,7 @@
       filling: fillings[1],
       index: 0,
       kind: "floor",
+      peelOut: peelOutDuration,
       seed: Math.random() * 10
     };
     tower = [support];
@@ -134,6 +139,7 @@
     objective = null;
     apples = [];
     pendingApple = null;
+    fruitTurnNext = true;
     appleTimer = 0;
     appleTurn = false;
     knock = null;
@@ -175,7 +181,7 @@
   }
 
   function createObjective() {
-    const gift = score >= nextGiftScore && score + 1 !== awardScore;
+    const gift = score >= nextGiftScore && !awardScores.includes(score + 1);
     const speed = (width / 2 + platformWidth + 24) / 2.4 * speedFactor();
     const dir = score >= alternateSideScore && Math.random() < .5 ? 1 : -1;
     const rightX = width >= 900 ? Math.max(width - platformWidth - 300, player.x + 350) : player.x - platformWidth / 2 + speed * objectiveLeadTime;
@@ -313,8 +319,10 @@
     }
     spawnCrumbs(player.x, player.y + player.radius, 9);
     support.squishTime = 0;
+    support.peelOut = 0;
     if (score === alternateSideScore) hint.textContent = "Cheesecakes now slide in from both sides!";
-    if (score === appleScore) hint.textContent = "Apples take turns with the cheesecakes, watch both sides!";
+    if (score === appleScore) hint.textContent = "Apples roll in from the left, jump over them!";
+    if (score === fruitScore) hint.textContent = "Bouncing oranges are coming from the right!";
     if (score >= appleScore && Math.random() < .45) {
       appleTurn = true;
       appleTimer = .6;
@@ -338,15 +346,15 @@
     }
     renderHud();
     objective = null;
-    if (score === awardScore) startAward();
+    if (awardScores.includes(score)) startAward();
   }
 
   function startAward() {
     award = { reset: false };
-    badge = { time: 0 };
+    badge = { time: 0, score };
     player.onGround = false;
     player.vy = -Math.sqrt(2 * gravity * (player.y - cameraY + 200));
-    hint.textContent = `${awardScore} hops! The stack starts fresh!`;
+    hint.textContent = `${score} hops! The stack starts fresh!`;
   }
 
   function updateAward(dt) {
@@ -396,10 +404,12 @@
     });
   }
 
-  function spawnApple(dir, speedMultiplier, red) {
+  function spawnApple(dir, speedMultiplier, red, bounce = false) {
     apples.push({
       dir,
       red,
+      bounce,
+      vy: -fruitBounceSpeed * (.5 + Math.random() * .5),
       x: dir > 0 ? -appleRadius * 2 : width + appleRadius * 2,
       y: support.y - appleRadius,
       radius: appleRadius,
@@ -411,21 +421,37 @@
     if (appleTurn && !respawnTimer && !apples.length && !pendingApple) {
       appleTimer -= dt;
       if (appleTimer <= 0) {
-        const dir = Math.random() < .5 ? 1 : -1;
-        spawnApple(dir, 1.35, false);
-        pendingApple = { delay: .4 + Math.random() * 1.4, dir: -dir, speedMultiplier: 1 + Math.random() * .9 };
+        const useFruit = score >= fruitScore && fruitTurnNext;
+        if (score >= fruitScore) fruitTurnNext = !fruitTurnNext;
+        if (useFruit) {
+          spawnApple(-1, 1.1, false, true);
+          pendingApple = { delay: .5 + Math.random() * 1.5, dir: -1, speedMultiplier: .9 + Math.random() * .6, bounce: true };
+        } else {
+          spawnApple(1, 1.35, false);
+          pendingApple = { delay: .4 + Math.random() * 1.4, dir: 1, speedMultiplier: 1 + Math.random() * .9, red: true };
+        }
       }
     }
     if (pendingApple && !respawnTimer) {
       pendingApple.delay -= dt;
       if (pendingApple.delay <= 0) {
-        spawnApple(pendingApple.dir, pendingApple.speedMultiplier, true);
+        spawnApple(pendingApple.dir, pendingApple.speedMultiplier, !!pendingApple.red, !!pendingApple.bounce);
         pendingApple = null;
       }
     }
     for (const apple of apples) {
       apple.x += apple.dir * apple.speed * dt;
-      apple.y += (support.y - apple.radius - apple.y) * Math.min(1, dt * 8);
+      const groundY = support.y - apple.radius;
+      if (apple.bounce) {
+        apple.vy += gravity * dt;
+        apple.y += apple.vy * dt;
+        if (apple.y >= groundY) {
+          apple.y = groundY;
+          apple.vy = -fruitBounceSpeed * (.8 + Math.random() * .2);
+        }
+      } else {
+        apple.y += (groundY - apple.y) * Math.min(1, dt * 8);
+      }
       const dx = player.x - apple.x;
       const dy = player.y - apple.y;
       if (dx * dx + dy * dy < (player.radius + apple.radius * .85) ** 2) {
@@ -527,6 +553,7 @@
     tower.forEach((platform) => {
       if (platform.opening) platform.openTime += dt;
       if (platform.squishTime < squishDuration) platform.squishTime += dt;
+      if (platform.peelOut < peelOutDuration) platform.peelOut += dt;
     });
     if (player.y - cameraY < height * playerScreenRatio) {
       cameraY = player.y - height * playerScreenRatio;
@@ -546,6 +573,26 @@
   function squishScale(platform) {
     if (platform.squishTime === undefined || platform.squishTime >= squishDuration) return 1;
     return 1 - squishAmount * Math.sin(Math.PI * platform.squishTime / squishDuration);
+  }
+
+  function drawPeel(platform, x, w, visualHeight) {
+    const handleLength = 62;
+    const handleOnLeft = platform.dir > 0;
+    const boardTop = visualHeight - 3;
+    ctx.fillStyle = "#8a5a33";
+    const hx = handleOnLeft ? x - 6 - handleLength : x + w + 4;
+    roundRect(hx, boardTop + 1, handleLength + 2, 4, 2);
+    ctx.fill();
+    ctx.fillStyle = "#5e3a1f";
+    ctx.beginPath();
+    ctx.arc(handleOnLeft ? hx + 7 : hx + handleLength - 5, boardTop + 3, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#b3763f";
+    roundRect(x - 7, boardTop, w + 14, 7, 3);
+    ctx.fill();
+    ctx.fillStyle = "#cf9158";
+    roundRect(x - 5, boardTop, w + 10, 2.5, 1.5);
+    ctx.fill();
   }
 
   function drawPlatform(platform) {
@@ -574,6 +621,15 @@
     ctx.beginPath();
     ctx.ellipse(x + w / 2 + 4, visualHeight + 4, w * .48, 9, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    if (platform.peelOut === undefined || platform.peelOut < peelOutDuration) {
+      const out = (platform.peelOut || 0) / peelOutDuration;
+      ctx.save();
+      ctx.globalAlpha = 1 - out;
+      ctx.translate((platform.dir > 0 ? -1 : 1) * out * 40, 0);
+      drawPeel(platform, x, w, visualHeight);
+      ctx.restore();
+    }
 
     ctx.fillStyle = platform.filling.side;
     roundRect(x, 6, w, visualHeight - 6, 8);
@@ -660,7 +716,46 @@
     ctx.restore();
   }
 
+  function drawOrange(apple) {
+    const r = apple.radius;
+    ctx.save();
+    ctx.translate(apple.x, apple.y - cameraY);
+    const shadowDrop = Math.max(0, support.y - r - apple.y);
+    ctx.fillStyle = "rgba(113, 75, 48, .13)";
+    ctx.beginPath();
+    ctx.ellipse(0, r + 2 + shadowDrop, r * .9 * (1 - Math.min(.4, shadowDrop / 300)), 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.rotate(apple.x / r);
+    ctx.fillStyle = "#f7a031";
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#e8841f";
+    ctx.beginPath();
+    ctx.ellipse(r * .3, r * .25, r * .6, r * .65, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255, 255, 255, .5)";
+    ctx.beginPath();
+    ctx.ellipse(-r * .4, -r * .4, r * .22, r * .12, -.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(190, 95, 15, .45)";
+    for (const [dx, dy] of [[-.1, .1], [.35, -.3], [-.45, .35], [.1, .55]]) {
+      ctx.beginPath();
+      ctx.arc(dx * r, dy * r, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#3f8f2f";
+    ctx.beginPath();
+    ctx.ellipse(3, -r + 1, 7, 3.5, -.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   function drawApple(apple) {
+    if (apple.bounce) {
+      drawOrange(apple);
+      return;
+    }
     const r = apple.radius;
     ctx.save();
     ctx.translate(apple.x, apple.y - cameraY);
@@ -821,10 +916,10 @@
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.font = `${Math.round(r * .62)}px system-ui`;
-    ctx.fillText("🏆", 0, -r * .2);
+    ctx.fillText(badge.score >= 100 ? "👑" : "🏆", 0, -r * .2);
     ctx.fillStyle = "#7a4a1d";
     ctx.font = `900 ${Math.round(r * .22)}px system-ui`;
-    ctx.fillText(`${awardScore} HOPS!`, 0, r * .42);
+    ctx.fillText(`${badge.score} HOPS!`, 0, r * .42);
     ctx.restore();
   }
 
