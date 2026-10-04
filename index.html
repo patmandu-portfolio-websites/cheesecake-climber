@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#fff4df">
+  <title>Cheesecake Climber</title>
+  <link rel="stylesheet" href="game.css">
+</head>
+<body>
+  <canvas id="game" aria-label="Cheesecake Climber game"></canvas>
+
+  <header class="hud">
+    <div class="brand">🧀 <span>CHEESE</span>CAKE CLIMBER</div>
+    <div class="score-card">
+      <div><span class="label">HOPS</span><strong id="score">0</strong></div>
+      <div><span class="label">COINS</span><strong id="coins">0</strong></div>
+      <div><span class="label">BEST</span><strong id="best">0</strong></div>
+    </div>
+    <div class="brand" id="lives" aria-label="Lives">❤️❤️❤️</div>
+    <button class="icon-button" id="restart" aria-label="Restart game" title="Restart">↻</button>
+  </header>
+
+  <div class="inventory" id="inventory" aria-label="Collected toy inventory">🎁 TOYS · empty</div>
+  <div class="touch-controls" aria-label="Jump controls">
+    <button id="jump" aria-label="Jump">⬆ JUMP</button>
+  </div>
+  <div class="bottom-hint" id="hint">Tap / ↑ / SPACE to jump · land on the cheese!</div>
+
+  <section class="overlay" id="overlay">
+    <div class="panel">
+      <div class="mascot">🐹</div>
+      <h1 id="title">Cheesecake<br>Climber</h1>
+      <p id="message">Jump straight up as the cheese slides in from the right. Land on top, grab coins, and watch out for surprise gifts!</p>
+      <div class="flavours"><span>🍓 Berry</span><span>🍯 Honey</span><span>🍵 Matcha</span></div>
+      <button class="primary" id="play">Let's hop!</button>
+    </div>
+  </section>
+
+  <script src="game.js" defer></script>
+</body>
+</html>
